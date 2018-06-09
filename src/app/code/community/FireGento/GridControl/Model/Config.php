@@ -21,7 +21,7 @@ class FireGento_GridControl_Model_Config extends Varien_Object
      *
      * @param string $type
      * @param string $block
-     * @param string $value
+     * @param string|array $value
      * @return FireGento_GridControl_Model_Config
      */
     public function addCollectionUpdate($type, $block, $value)

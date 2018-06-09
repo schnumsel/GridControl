@@ -11,6 +11,7 @@ class FireGento_GridControl_Model_Processor
      * processes the grid block, checks gridcontrol configuration for updates on this block and calls column actions
      *
      * @param Mage_Adminhtml_Block_Widget $block
+     * @throws ReflectionException
      */
     public function processBlock($block)
     {
@@ -45,7 +46,7 @@ class FireGento_GridControl_Model_Processor
         // register current block, needed to extend the collection in FireGento_GridControl_Model_Observer
         Mage::register('firegento_gridcontrol_current_block', $block);
         // call _prepareCollection to reload the collection and apply column filters
-        $this->_callProtectedMethod($block, '_prepareCollection');
+        $this->_getReflector()->callProtectedMethod($block, '_prepareCollection');
         // remove current block to prevent race conditions in later collection loads
         Mage::unregister('firegento_gridcontrol_current_block');
     }
@@ -145,80 +146,22 @@ class FireGento_GridControl_Model_Processor
         $params->getBlock()->addColumn($params->getColumn()->getName(), $columnConfig);
     }
 
-    /**
-     * allows invoking protected methods
-     *
-     * @param $object
-     * @param string $methodName
-     * @return mixed
-     */
-    protected function _callProtectedMethod($object, $methodName)
-    {
-        $reflection = new ReflectionClass($object);
-        $method = $reflection->getMethod($methodName);
-        $method->setAccessible(true);
-        return $method->invoke($object);
-    }
-
-    /**
-     * gets reflected property
-     *
-     * @param Mage_Adminhtml_Block_Widget_Grid $grid
-     * @param string $propertyName
-     * @return ReflectionProperty
-     */
-    private function getReflectedProperty(Mage_Adminhtml_Block_Widget_Grid $grid, $propertyName)
-    {
-        $reflection = new ReflectionClass($grid);
-        $property = $reflection->getProperty($propertyName);
-        $property->setAccessible(true);
-        return $property;
-    }
-
-    /**
-     * gets a value of protected property on a grid object
-     *
-     * @param Mage_Adminhtml_Block_Widget_Grid $grid
-     * @param string $propertyName
-     * @return array
-     */
-    private function getGridProtectedPropertyValue(Mage_Adminhtml_Block_Widget_Grid $grid, $propertyName)
-    {
-        $property = $this->getReflectedProperty($grid, $propertyName);
-        return $property->getValue($grid);
-    }
-
-    /**
-     * sets a value of protected property on a grid object
-     *
-     * @param Mage_Adminhtml_Block_Widget_Grid $grid
-     * @param string $propertyName
-     * @param mixed $propertyValue
-     * @return Mage_Adminhtml_Block_Widget_Grid
-     */
-    private function setGridProtectedPropertyValue(
-        Mage_Adminhtml_Block_Widget_Grid $grid,
-        $propertyName,
-        $propertyValue
-    )
-    {
-        $property = $this->getReflectedProperty($grid, $propertyName);
-        $property->setValue($grid, $propertyValue);
-    }
 
     /**
      * removes a column from grid if grid doesn't have any method to do it (i.e. Magento 1.5)
      *
      * @param Mage_Adminhtml_Block_Widget_Grid $grid
      * @param string $columnName
+     *
+     * @throws ReflectionException
      */
     protected function removeGridColumn(Mage_Adminhtml_Block_Widget_Grid $grid, $columnName)
     {
         $columnsPropertyName = '_columns';
         $lastColumnIdPropertyName = '_lastColumnId';
 
-        $columns = $this->getGridProtectedPropertyValue($grid, $columnsPropertyName);
-        $lastColumnId = $this->getGridProtectedPropertyValue($grid, $lastColumnIdPropertyName);
+        $columns = $this->_getReflector()->getGridProtectedPropertyValue($grid, $columnsPropertyName);
+        $lastColumnId = $this->_getReflector()->getGridProtectedPropertyValue($grid, $lastColumnIdPropertyName);
 
         if (isset($columns[$columnName])) {
             unset($columns[$columnName]);
@@ -227,7 +170,15 @@ class FireGento_GridControl_Model_Processor
             }
         }
 
-        $this->setGridProtectedPropertyValue($grid, $columnsPropertyName, $columns);
-        $this->setGridProtectedPropertyValue($grid, $lastColumnIdPropertyName, $lastColumnId);
+        $this->_getReflector()->setGridProtectedPropertyValue($grid, $columnsPropertyName, $columns);
+        $this->_getReflector()->setGridProtectedPropertyValue($grid, $lastColumnIdPropertyName, $lastColumnId);
+    }
+
+    /**
+     * @return FireGento_GridControl_Model_Reflector
+     */
+    protected function _getReflector()
+    {
+        return Mage::getSingleton('firegento_gridcontrol/reflector');
     }
 }

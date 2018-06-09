@@ -30,10 +30,15 @@ class FireGento_GridControl_Model_Observer
      *
      * @param Varien_Event_Observer $event
      * @return void
+     *
+     * @throws ReflectionException
      */
     public function eavCollectionAbstractLoadBefore(Varien_Event_Observer $event)
     {
         $columnJoinField = array();
+
+        /** @var  Mage_Eav_Model_Entity_Collection_Abstract $collection */
+        $collection = $event->getCollection();
 
         if (Mage::registry('firegento_gridcontrol_current_block')) {
             $blockId = Mage::registry('firegento_gridcontrol_current_block')->getId();
@@ -44,9 +49,9 @@ class FireGento_GridControl_Model_Observer
             $config = Mage::getSingleton('firegento_gridcontrol/config');
 
             // add attributes to eav collection
-            if ($event->getCollection() instanceof Mage_Eav_Model_Entity_Collection_Abstract){
+            if ($collection instanceof Mage_Eav_Model_Entity_Collection_Abstract){
                 foreach ($config->getCollectionUpdates(FireGento_GridControl_Model_Config::TYPE_ADD_ATTRIBUTE, $blockId) as $entry) {
-                    $event->getCollection()->addAttributeToSelect($entry);
+                    $collection->addAttributeToSelect($entry);
                 }
             }
 
@@ -58,7 +63,7 @@ class FireGento_GridControl_Model_Observer
                     continue;
                 }
                 try {
-                    $event->getCollection()->joinAttribute(
+                    $collection->joinAttribute(
                         $attribute[0],
                         $attribute[1],
                         $attribute[2],
@@ -78,7 +83,7 @@ class FireGento_GridControl_Model_Observer
                     continue;
                 }
                 try {
-                    $event->getCollection()->joinField(
+                    $collection->joinField(
                         $field[0],
                         $field[1],
                         $field[2],
@@ -86,6 +91,8 @@ class FireGento_GridControl_Model_Observer
                         $field[4],
                         $field[5]
                     );
+                    $columnJoinField[$field[2]] = $field[0];
+
                 } catch (Exception $e) {
                     Mage::logException($e);
                 }
@@ -94,7 +101,7 @@ class FireGento_GridControl_Model_Observer
             // joins to collection
             foreach ($config->getCollectionUpdates(FireGento_GridControl_Model_Config::TYPE_JOIN, $blockId) as $field) {
                 try {
-                    $event->getCollection()->join(
+                    $collection->join(
                         $field['table'],
                         str_replace('{{table}}', '`' . $field['table'] . '`', $field['condition']),
                         $field['field']
@@ -111,6 +118,34 @@ class FireGento_GridControl_Model_Observer
                     $column->setIndex($columnJoinField[$column->getId()]);
                 }
             }
+
+
+            // at last re-add filters
+
+            $block = Mage::registry('firegento_gridcontrol_current_block');
+            $filter = $block->getParam($block->getVarNameFilter(), null);
+            $defaultFilter = $this->_getReflector()->getGridProtectedPropertyValue($block, '_defaultFilter');
+            if (is_null($filter)) {
+                $filter = $defaultFilter;        }
+
+            if (is_string($filter)) {
+                $data = Mage::helper('adminhtml')->prepareFilterString($filter);
+                $this->_getReflector()->callProtectedMethod($block, '_setFilterValues', $data);
+            }
+            else if ($filter && is_array($filter)) {
+                $this->_getReflector()->callProtectedMethod($block, '_setFilterValues', $filter);
+            }
+            else if(0 !== sizeof($defaultFilter)) {
+                $this->_getReflector()->callProtectedMethod($block, '_setFilterValues', $defaultFilter);
+            }
         }
+    }
+
+    /**
+     * @return FireGento_GridControl_Model_Reflector
+     */
+    protected function _getReflector()
+    {
+        return Mage::getSingleton('firegento_gridcontrol/reflector');
     }
 }
